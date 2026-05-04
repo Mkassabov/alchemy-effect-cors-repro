@@ -1,0 +1,18 @@
+{
+  "name": "alchemy-effect-cors-repro",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "deploy": "alchemy deploy --yes",
+    "destroy": "alchemy destroy --yes",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "alchemy": "2.0.0-beta.29",
+    "effect": "4.0.0-beta.60"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251015.0",
+    "@types/bun": "latest"
+  }
+}
