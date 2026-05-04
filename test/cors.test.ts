@@ -5,8 +5,9 @@ const BASE_URL = process.env.WORKER_URL;
 if (!BASE_URL) {
   throw new Error(
     "Set WORKER_URL to the deployed worker's base URL.\n" +
-      "  bun run deploy           # prints { url: ... }\n" +
-      "  WORKER_URL=<url> bun test",
+      "  bun run deploy             # prints { url: ... }\n" +
+      "Then put the URL in .env (bun auto-loads it):\n" +
+      "  WORKER_URL=https://...workers.dev",
   );
 }
 

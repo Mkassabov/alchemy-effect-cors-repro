@@ -80,9 +80,19 @@ bun install
 # Auth happens on first deploy. Pass --profile if you have a saved one.
 bun run deploy
 # → prints { url: "https://...workers.dev" }
+```
 
-# Run the regression tests against the deployed URL.
-WORKER_URL=https://your-deployed-url.workers.dev bun test
+Drop the URL into a `.env` file (bun auto-loads it on `bun test`):
+
+```ini
+WORKER_URL=https://your-deployed-url.workers.dev
+```
+
+Then:
+
+```sh
+bun test
+# → 1 pass, 1 fail (the failing one is the bug)
 
 # Tear it down when done.
 bun run destroy
