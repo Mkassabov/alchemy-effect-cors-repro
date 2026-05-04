@@ -1,13 +1,13 @@
 # alchemy-effect — `HttpMiddleware.cors()` doesn't tag actual responses on Cloudflare Worker
 
-Reproduction of a CORS bug surface when serving an `HttpApi` from a
+Reproduction of a CORS bug that surfaces when serving an `HttpApi` from a
 `Cloudflare.Worker` resource using effect's built-in
 `HttpMiddleware.cors()`.
 
 ## Versions
 
 - `alchemy@2.0.0-beta.29`
-- `effect@4.0.0-beta.60`
+- `effect@4.0.0-beta.58`
 
 ## Symptom
 
@@ -30,21 +30,21 @@ response is missing every CORS header.
 curl -i -X OPTIONS \
   -H "Origin: https://example.test" \
   -H "Access-Control-Request-Method: GET" \
-  $WORKER/hello | grep -i access-control
+  $WORKER_URL/hello | grep -i access-control
 # → access-control-allow-origin: *
 # → access-control-allow-methods: GET, HEAD, PUT, PATCH, POST, DELETE
 
 # actual response has no CORS headers
-curl -i -H "Origin: https://example.test" $WORKER/hello | grep -i access-control
+curl -i -H "Origin: https://example.test" $WORKER_URL/hello | grep -i access-control
 # → (no output)
 ```
 
 ## Root cause
 
-`HttpMiddleware.cors()` handles the two paths differently
-([source](https://github.com/Effect-TS/effect/blob/main/packages/effect/src/unstable/http/HttpMiddleware.ts)):
+`HttpMiddleware.cors()` handles the two paths differently:
 
 ```ts
+// simplified from effect's source
 return httpApp => Effect.withFiber(fiber => {
   const request = ...;
   if (request.method === "OPTIONS") {
@@ -58,7 +58,7 @@ return httpApp => Effect.withFiber(fiber => {
 });
 ```
 
-- **OPTIONS preflight** — cors builds the response itself, with headers,
+- **OPTIONS preflight** — cors builds the response itself with headers,
   and that response goes back unchanged. ✅
 - **GET / POST / etc.** — cors does NOT touch the response. It pushes a
   `preResponseHandler` onto a list on the request. The list is meant to
@@ -77,20 +77,21 @@ drained, so CORS headers never make it onto real responses.
 ```sh
 bun install
 
-# auth happens on first deploy
+# Auth happens on first deploy. Pass --profile if you have a saved one.
 bun run deploy
-# → prints worker URL
+# → prints { url: "https://...workers.dev" }
 
-# integration tests (deploys, asserts headers, destroys)
-bun test
-# expect: "OPTIONS preflight ..." passes, "GET response ..." FAILS.
+# Run the regression tests against the deployed URL.
+WORKER_URL=https://your-deployed-url.workers.dev bun test
 
-# tear down when done
+# Tear it down when done.
 bun run destroy
 ```
 
-The integration test in [`test/integ.test.ts`](test/integ.test.ts) is
-the executable spec — preflight assertion passes, GET assertion fails.
+[`test/cors.test.ts`](test/cors.test.ts) is the executable spec:
+
+- ✅ `OPTIONS preflight carries Access-Control-Allow-Origin` — passes
+- ❌ `GET response carries Access-Control-Allow-Origin` — fails
 
 ## Workaround
 
@@ -116,7 +117,7 @@ return Effect.gen(function* () {
 ```
 
 This works but loses the per-origin / credentials logic baked into
-`HttpMiddleware.cors()`.
+`HttpMiddleware.cors()` (allowedOrigins, conditional Vary, etc.).
 
 ## Suggested fix
 
@@ -129,6 +130,29 @@ Either of:
    `Cloudflare.Worker` and steer users toward a different CORS pattern
    for that environment.
 
+## Note: a separate `Test.make` issue I hit while building this repro
+
+I originally wrote the test using `alchemy/Test/Bun`'s
+`Test.make({ providers: Cloudflare.providers(), state: Cloudflare.state() })`
+plus `beforeAll(deploy(Stack))`, mirroring
+[`examples/cloudflare-worker-async/test/integ.test.ts`](https://github.com/alchemy-run/alchemy-effect/blob/main/examples/cloudflare-worker-async/test/integ.test.ts).
+That fails immediately with:
+
+```
+error: Service not found: AuthProviders
+  (defined at .../alchemy/src/Auth/AuthProvider.ts:25:44)
+```
+
+…even when `ALCHEMY_PROFILE` is set and the profile exists. The same
+example test inside the alchemy repo itself fails identically when
+invoked via `bun test`. The repo's `package.json` runs the suite via
+`bun vitest run` (`scripts/test.ts`), not `bun:test`, so the bun adapter
+path may have regressed. That's why the test in this repro hits the
+deployed URL directly via `fetch` instead of going through `Test.make`.
+
+If you'd rather I split that into its own minimal reproduction, happy
+to.
+
 ## Layout
 
 ```
@@ -137,8 +161,9 @@ Either of:
 ├── src/
 │   └── api.ts              # HttpApi + Worker, with HttpMiddleware.cors()
 ├── test/
-│   └── integ.test.ts       # bun:test integration test using alchemy/Test/Bun
+│   └── cors.test.ts        # bun:test assertions against deployed URL
 ├── package.json
 ├── tsconfig.json
+├── bunfig.toml             # linker = "hoisted" (single effect install)
 └── README.md
 ```

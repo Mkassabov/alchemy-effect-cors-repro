@@ -8,8 +8,10 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@effect/platform-bun": "4.0.0-beta.58",
+    "@effect/platform-node": "4.0.0-beta.58",
     "alchemy": "2.0.0-beta.29",
-    "effect": "4.0.0-beta.60"
+    "effect": "4.0.0-beta.58"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20251015.0",
